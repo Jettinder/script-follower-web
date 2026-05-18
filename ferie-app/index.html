@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portale HR</title>
+  <!-- Tabler Icons: il markup usa le classi `ti ti-*`; il webfont va caricato. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -74,9 +76,23 @@
   </div>
 
   <div class="section-title" style="margin-top:1.5rem;">
+    <i class="ti ti-calendar" aria-hidden="true"></i>Calendario
+  </div>
+  <div class="info-card">
+    <div id="dip-calendario" class="calendario"></div>
+  </div>
+
+  <div class="section-title" style="margin-top:1.5rem;">
     <i class="ti ti-calendar" aria-hidden="true"></i>Le mie richieste
   </div>
   <div id="dip-ferie-list" class="loading-row">
+    <span class="spinner"></span>Caricamento...
+  </div>
+
+  <div class="section-title" style="margin-top:1.5rem;">
+    <i class="ti ti-alert-triangle" aria-hidden="true"></i>Periodi bloccati / sconsigliati
+  </div>
+  <div id="dip-vincoli-list" class="loading-row">
     <span class="spinner"></span>Caricamento...
   </div>
 
@@ -109,9 +125,21 @@
     <button class="tab" onclick="switchTab('tab-team', this)">
       <i class="ti ti-users" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Mio team
     </button>
+    <button class="tab" onclick="switchTab('tab-vincoli', this)">
+      <i class="ti ti-lock" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Vincoli
+    </button>
   </div>
 
   <div id="tab-ferie" class="tab-content active">
+    <div class="section-title">
+      <i class="ti ti-calendar" aria-hidden="true"></i>Calendario del gruppo
+    </div>
+    <div class="info-card">
+      <div id="resp-calendario" class="calendario"></div>
+    </div>
+    <div class="section-title" style="margin-top:1.5rem;">
+      <i class="ti ti-list-check" aria-hidden="true"></i>Richieste del gruppo
+    </div>
     <div id="resp-ferie-list" class="loading-row">
       <span class="spinner"></span>Caricamento...
     </div>
@@ -123,10 +151,193 @@
     </div>
   </div>
 
+  <div id="tab-vincoli" class="tab-content">
+    <div class="section-title">
+      <i class="ti ti-lock-plus" aria-hidden="true"></i>Nuovo vincolo per il mio gruppo
+    </div>
+    <div class="info-card">
+      <div class="date-row">
+        <div class="field-form">
+          <label for="resp-vinc-inizio">Data inizio</label>
+          <input type="date" id="resp-vinc-inizio" />
+        </div>
+        <div class="field-form">
+          <label for="resp-vinc-fine">Data fine</label>
+          <input type="date" id="resp-vinc-fine" />
+        </div>
+      </div>
+      <div class="date-row">
+        <div class="field-form">
+          <label for="resp-vinc-tipo">Tipo periodo</label>
+          <select id="resp-vinc-tipo">
+            <option value="Bloccato">Bloccato</option>
+            <option value="Sconsigliato">Sconsigliato</option>
+          </select>
+        </div>
+        <div class="field-form">
+          <label for="resp-vinc-ruolo">Ruolo (opzionale)</label>
+          <select id="resp-vinc-ruolo"></select>
+        </div>
+      </div>
+      <p class="modal-hint">Il vincolo sarà applicato automaticamente al tuo gruppo.</p>
+      <button class="btn-submit" id="btn-crea-vincolo-resp" onclick="creaVincoloResp()">
+        <i class="ti ti-plus" style="font-size:13px;vertical-align:-1px;margin-right:4px;" aria-hidden="true"></i>Crea vincolo
+      </button>
+    </div>
+    <div class="section-title" style="margin-top:1.5rem;">
+      <i class="ti ti-lock" aria-hidden="true"></i>Vincoli del mio gruppo
+    </div>
+    <div id="resp-vincoli-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+</div>
+
+<!-- ── CEO ────────────────────────────────────────────────────────────────── -->
+<div id="page-ceo" class="page" style="padding:0 0.25rem;">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="avatar avatar-ceo" id="ceo-avatar"></div>
+      <div>
+        <div class="username" id="ceo-name"></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
+          <span class="role-badge ceo">
+            <i class="ti ti-crown" style="font-size:12px;vertical-align:-1px;margin-right:3px;" aria-hidden="true"></i>CEO
+          </span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">
+      <i class="ti ti-logout" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Esci
+    </button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('tab-dashboard', this)">
+      <i class="ti ti-layout-dashboard" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Dashboard
+    </button>
+    <button class="tab" onclick="switchTab('tab-gruppi', this)">
+      <i class="ti ti-users-group" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gruppi
+    </button>
+    <button class="tab" onclick="switchTab('tab-personale', this)">
+      <i class="ti ti-id-badge" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Personale
+    </button>
+    <button class="tab" onclick="switchTab('tab-ceo-ferie', this)">
+      <i class="ti ti-calendar" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Ferie
+    </button>
+    <button class="tab" onclick="switchTab('tab-ceo-vincoli', this)">
+      <i class="ti ti-lock" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Vincoli
+    </button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="dash-grid">
+      <div class="dash-card">
+        <div class="dash-icon"><i class="ti ti-users-group" aria-hidden="true"></i></div>
+        <div><div class="dash-num" id="dash-gruppi">—</div><div class="dash-label">Gruppi</div></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-icon"><i class="ti ti-id-badge" aria-hidden="true"></i></div>
+        <div><div class="dash-num" id="dash-utenti">—</div><div class="dash-label">Utenti</div></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-icon"><i class="ti ti-clock-hour-4" aria-hidden="true"></i></div>
+        <div><div class="dash-num" id="dash-pendenti">—</div><div class="dash-label">Richieste pendenti</div></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
+        <div><div class="dash-num" id="dash-vincoli">—</div><div class="dash-label">Vincoli attivi</div></div>
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:1.5rem;">
+      <i class="ti ti-calendar" aria-hidden="true"></i>Calendario aziendale
+    </div>
+    <div class="info-card">
+      <div id="ceo-calendario" class="calendario"></div>
+    </div>
+  </div>
+
+  <!-- Gruppi -->
+  <div id="tab-gruppi" class="tab-content">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">
+        <i class="ti ti-users-group" aria-hidden="true"></i>Gruppi
+      </div>
+      <button class="btn-submit" onclick="modalGruppo(null)">
+        <i class="ti ti-plus" style="font-size:13px;vertical-align:-1px;margin-right:4px;" aria-hidden="true"></i>Nuovo gruppo
+      </button>
+    </div>
+    <div id="ceo-gruppi-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+  <!-- Personale -->
+  <div id="tab-personale" class="tab-content">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">
+        <i class="ti ti-id-badge" aria-hidden="true"></i>Personale
+      </div>
+      <button class="btn-submit" onclick="modalUtente(null)">
+        <i class="ti ti-user-plus" style="font-size:13px;vertical-align:-1px;margin-right:4px;" aria-hidden="true"></i>Nuovo utente
+      </button>
+    </div>
+    <div class="filtri-row">
+      <select id="ceo-filtro-gruppo" onchange="loadCeoPersonale()"></select>
+      <select id="ceo-filtro-ruolo" onchange="loadCeoPersonale()"></select>
+    </div>
+    <div id="ceo-personale-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+  <!-- Ferie (tutti i gruppi) -->
+  <div id="tab-ceo-ferie" class="tab-content">
+    <div class="filtri-row">
+      <select id="ceo-ferie-gruppo" onchange="loadCeoFerie()"></select>
+    </div>
+    <div id="ceo-ferie-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+  <!-- Vincoli -->
+  <div id="tab-ceo-vincoli" class="tab-content">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">
+        <i class="ti ti-lock" aria-hidden="true"></i>Vincoli
+      </div>
+      <button class="btn-submit" onclick="modalVincolo(null)">
+        <i class="ti ti-plus" style="font-size:13px;vertical-align:-1px;margin-right:4px;" aria-hidden="true"></i>Nuovo vincolo
+      </button>
+    </div>
+    <div id="ceo-vincoli-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+</div>
+
+<!-- ── MODAL ──────────────────────────────────────────────────────────────── -->
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-titolo"></div>
+      <button class="modal-close" onclick="chiudiModal()" aria-label="Chiudi">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="calendar.js"></script>
 <script src="app.js"></script>
+<script src="ceo.js"></script>
 </body>
 </html>

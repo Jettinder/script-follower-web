@@ -1,6 +1,13 @@
 const BASE = 'http://localhost:5000/api';
 let _token = '', _utente = {};
 
+// Cache condivise (popolate dopo il login, usate da app.js e ceo.js)
+let _ruoliCache = {};   // codRuolo  -> denominazione
+let _gruppiCache = {};  // idGruppo  -> denominazione
+
+// Riferimenti ai calendari delle pagine dipendente/responsabile
+let _calDip = null, _calResp = null;
+
 // ── Utilità ──────────────────────────────────────────────────────────────────
 
 function showPage(id) {
@@ -81,17 +88,31 @@ async function doLogin() {
     _token  = data.token;
     _utente = data;
 
-    if (data.responsabile) {
+    // Cache ruoli e gruppi: servono alle dropdown e ai dettagli dei vincoli.
+    await caricaCache();
+
+    if (data.ceo) {
+      // La pagina CEO è gestita da ceo.js
+      initCeo(data);
+    } else if (data.responsabile) {
       document.getElementById('resp-avatar').textContent = initiali(data.nome, data.cognome);
       document.getElementById('resp-name').textContent   = (data.nome || '') + ' ' + (data.cognome || '');
       showPage('page-responsabile');
+      _calResp = creaCalendario(document.getElementById('resp-calendario'), {});
       loadRespFerie();
       loadTeam();
+      loadRespVincoli();
     } else {
       document.getElementById('dip-avatar').textContent = initiali(data.nome, data.cognome);
       document.getElementById('dip-name').textContent   = (data.nome || '') + ' ' + (data.cognome || '');
       showPage('page-dipendente');
+      _calDip = creaCalendario(document.getElementById('dip-calendario'), {
+        onDayClick: iso => `<button class="btn-cal-richiedi" onclick="precompilaFerie('${iso}')">
+            <i class="ti ti-calendar-plus" aria-hidden="true"></i> Richiedi da questo giorno
+          </button>`
+      });
       loadDipFerie();
+      loadDipVincoli();
     }
   } catch (e) {
     errEl.textContent = 'Impossibile contattare il server. Controlla che Flask sia in esecuzione.';
@@ -104,14 +125,32 @@ async function doLogin() {
 
 function doLogout() {
   _token = ''; _utente = {};
+  _ruoliCache = {}; _gruppiCache = {};
+  _calDip = null; _calResp = null;
   document.getElementById('inp-email').value = '';
   document.getElementById('inp-pwd').value   = '';
   document.getElementById('login-error').style.display = 'none';
   ['dip-ferie-list', 'resp-ferie-list', 'resp-team-list'].forEach(id => {
-    document.getElementById(id).innerHTML = '<div class="loading-row"><span class="spinner"></span>Caricamento...</div>';
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="loading-row"><span class="spinner"></span>Caricamento...</div>';
   });
   showPage('page-login');
 }
+
+// Carica ruoli (sempre) e gruppi (in base ai permessi) nelle cache globali.
+async function caricaCache() {
+  try {
+    const ruoli = await apiCall('/ruoli');
+    (ruoli.ruoli || []).forEach(r => { _ruoliCache[r.codice] = r.denominazione; });
+  } catch (e) { /* le dropdown ruolo resteranno vuote */ }
+  try {
+    const gruppi = await apiCall('/gruppi');
+    (gruppi.gruppi || []).forEach(g => { _gruppiCache[g.id] = g.denominazione; });
+  } catch (e) { /* idem per i gruppi */ }
+}
+
+function nomeRuolo(cod) { return cod == null ? 'Tutti i ruoli'  : (_ruoliCache[cod] || ('Ruolo ' + cod)); }
+function nomeGruppo(id) { return id  == null ? 'Tutti i gruppi' : (_gruppiCache[id] || ('Gruppo ' + id)); }
 
 // ── Dipendente ────────────────────────────────────────────────────────────────
 
@@ -124,6 +163,7 @@ async function loadDipFerie() {
       return;
     }
     const list = data.ferie || [];
+    if (_calDip) _calDip.setFerie(list);
     if (!list.length) {
       el.innerHTML = '<div class="loading-row">Nessuna richiesta inviata.</div>';
       return;
@@ -132,6 +172,13 @@ async function loadDipFerie() {
   } catch (e) {
     el.innerHTML = '<div class="loading-row" style="color:var(--color-text-danger)">Errore caricamento dati.</div>';
   }
+}
+
+// Pre-compila le date partendo dal giorno cliccato sul calendario.
+function precompilaFerie(iso) {
+  document.getElementById('dip-inizio').value = iso;
+  document.getElementById('dip-fine').value   = iso;
+  document.getElementById('dip-inizio').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function inviaFerie() {
@@ -145,8 +192,12 @@ async function inviaFerie() {
   btn.disabled = true;
   try {
     const data = await apiCall('/ferie', 'POST', { inizio, fine });
-    if (data.errore) { showToast('Errore: ' + data.errore); return; }
-    showToast('✓ Richiesta inviata con successo!');
+    if (data.errore) { showToast('Errore: ' + data.errore, 4000); return; }
+    if (data.avvisi && data.avvisi.length) {
+      showToast('⚠ ' + data.avvisi.join(' '), 5000);
+    } else {
+      showToast('✓ Richiesta inviata con successo!');
+    }
     document.getElementById('dip-inizio').value = '';
     document.getElementById('dip-fine').value   = '';
     loadDipFerie();
@@ -154,6 +205,26 @@ async function inviaFerie() {
     showToast('Errore di rete.');
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function loadDipVincoli() {
+  const el = document.getElementById('dip-vincoli-list');
+  try {
+    const data = await apiCall('/vincoli');
+    if (data.errore) {
+      el.innerHTML = `<div class="loading-row" style="color:var(--color-text-danger)">${data.errore}</div>`;
+      return;
+    }
+    const list = data.vincoli || [];
+    if (_calDip) _calDip.setVincoli(list);
+    if (!list.length) {
+      el.innerHTML = '<div class="loading-row">Nessun periodo bloccato o sconsigliato.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="vincoli-list">' + list.map(v => vincoloItemHTML(v, false)).join('') + '</div>';
+  } catch (e) {
+    el.innerHTML = '<div class="loading-row" style="color:var(--color-text-danger)">Errore caricamento vincoli.</div>';
   }
 }
 
@@ -168,6 +239,7 @@ async function loadRespFerie() {
       return;
     }
     const list = data.ferie || [];
+    if (_calResp) _calResp.setFerie(list);
     if (!list.length) {
       el.innerHTML = '<div class="loading-row">Nessuna richiesta nel gruppo.</div>';
       return;
@@ -178,12 +250,22 @@ async function loadRespFerie() {
   }
 }
 
+// Ricarica la lista ferie corretta in base alla pagina attiva (resp o CEO).
+function ricaricaFerieCorrenti() {
+  const ceo = document.getElementById('page-ceo');
+  if (ceo && ceo.classList.contains('active') && typeof loadCeoFerie === 'function') {
+    loadCeoFerie();
+  } else {
+    loadRespFerie();
+  }
+}
+
 async function gestisciFerie(id, nuovoStato) {
   try {
     const data = await apiCall('/ferie/' + id + '/approva', 'PUT', { stato: nuovoStato });
     if (data.errore) { showToast('Errore: ' + data.errore); return; }
     showToast(nuovoStato === 'Approvato' ? '✓ Richiesta approvata' : '✗ Richiesta rifiutata');
-    loadRespFerie();
+    ricaricaFerieCorrenti();
   } catch (e) {
     showToast('Errore di rete.');
   }
@@ -207,11 +289,88 @@ async function loadTeam() {
         <div class="member-av">${initiali(m.nome, m.cognome)}</div>
         <div>
           <div class="member-name">${m.nome || ''} ${m.cognome || ''}</div>
-          <div class="member-role">${m.responsabile ? 'Responsabile' : 'Dipendente'} · ${m.ruolo || ''}</div>
+          <div class="member-role">${m.ceo ? 'CEO' : (m.responsabile ? 'Responsabile' : 'Dipendente')} · ${m.ruolo || ''}</div>
         </div>
       </div>`).join('') + '</div>';
   } catch (e) {
     el.innerHTML = '<div class="loading-row" style="color:var(--color-text-danger)">Errore caricamento team.</div>';
+  }
+}
+
+// ── Vincoli (responsabile) ────────────────────────────────────────────────────
+
+async function loadRespVincoli() {
+  const el = document.getElementById('resp-vincoli-list');
+  // Popola la dropdown ruolo del form (con opzione "Tutti i ruoli").
+  popolaSelectRuoli('resp-vinc-ruolo', true);
+  try {
+    const data = await apiCall('/vincoli');
+    if (data.errore) {
+      el.innerHTML = `<div class="loading-row" style="color:var(--color-text-danger)">${data.errore}</div>`;
+      return;
+    }
+    const list = data.vincoli || [];
+    if (_calResp) _calResp.setVincoli(list);
+    if (!list.length) {
+      el.innerHTML = '<div class="loading-row">Nessun vincolo per il tuo gruppo.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="vincoli-list">' + list.map(v => {
+      // Il responsabile può modificare solo i vincoli esclusivi del suo gruppo.
+      const soloMio = v.limitazioni.length > 0 &&
+        v.limitazioni.every(l => l.idGruppo === _utente.idGruppo);
+      return vincoloItemHTML(v, soloMio);
+    }).join('') + '</div>';
+  } catch (e) {
+    el.innerHTML = '<div class="loading-row" style="color:var(--color-text-danger)">Errore caricamento vincoli.</div>';
+  }
+}
+
+async function creaVincoloResp() {
+  const inizio = document.getElementById('resp-vinc-inizio').value;
+  const fine   = document.getElementById('resp-vinc-fine').value;
+  const tipo   = document.getElementById('resp-vinc-tipo').value;
+  const ruolo  = document.getElementById('resp-vinc-ruolo').value;
+  const btn    = document.getElementById('btn-crea-vincolo-resp');
+
+  if (!inizio || !fine) { showToast('Inserisci data inizio e fine.'); return; }
+  if (fine < inizio)    { showToast('La data fine deve essere successiva.'); return; }
+
+  // Il vincolo è forzato sul proprio gruppo; il ruolo è opzionale.
+  const limitazioni = [{ idGruppo: _utente.idGruppo, codRuolo: ruolo ? parseInt(ruolo) : null }];
+
+  btn.disabled = true;
+  try {
+    const data = await apiCall('/vincoli', 'POST',
+      { inizio, fine, tipoPeriodo: tipo, limitazioni });
+    if (data.errore) { showToast('Errore: ' + data.errore, 4000); return; }
+    showToast('✓ Vincolo creato');
+    document.getElementById('resp-vinc-inizio').value = '';
+    document.getElementById('resp-vinc-fine').value   = '';
+    document.getElementById('resp-vinc-ruolo').value  = '';
+    loadRespVincoli();
+  } catch (e) {
+    showToast('Errore di rete.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function eliminaVincolo(id) {
+  if (!confirm('Eliminare definitivamente questo vincolo?')) return;
+  try {
+    const data = await apiCall('/vincoli/' + id, 'DELETE');
+    if (data.errore) { showToast('Errore: ' + data.errore); return; }
+    showToast('✓ Vincolo eliminato');
+    const ceo = document.getElementById('page-ceo');
+    if (ceo && ceo.classList.contains('active') && typeof loadCeoVincoli === 'function') {
+      loadCeoVincoli();
+      loadCeoDashboard();
+    } else {
+      loadRespVincoli();
+    }
+  } catch (e) {
+    showToast('Errore di rete.');
   }
 }
 
@@ -255,6 +414,49 @@ function ferieItemHTML(f, isResp) {
     </div>`;
 }
 
+// ── Vincolo item HTML (riusato da dipendente, responsabile, CEO) ──────────────
+
+function vincoloItemHTML(v, modificabile) {
+  const tipoCls = v.tipoPeriodo === 'Bloccato' ? 'bloccato' : 'sconsigliato';
+
+  let target;
+  if (v.globale) {
+    target = 'Tutti i gruppi e ruoli';
+  } else {
+    target = v.limitazioni.map(l =>
+      `${nomeGruppo(l.idGruppo)} / ${nomeRuolo(l.codRuolo)}`).join(' · ');
+  }
+
+  const azioni = modificabile ? `
+    <button class="btn-mini-danger" onclick="eliminaVincolo(${v.id})">
+      <i class="ti ti-trash" style="font-size:13px;" aria-hidden="true"></i> Elimina
+    </button>` : '';
+
+  return `
+    <div class="vincolo-item">
+      <div class="vincolo-head">
+        <span class="vincolo-badge ${tipoCls}">${v.tipoPeriodo}</span>
+        <span class="vincolo-date">${fmtDate(v.inizio)} → ${fmtDate(v.fine)}</span>
+        ${azioni}
+      </div>
+      <div class="vincolo-target">
+        <i class="ti ti-users-group" style="font-size:12px;vertical-align:-1px;margin-right:3px;" aria-hidden="true"></i>
+        ${escHTML(target)}
+      </div>
+    </div>`;
+}
+
+// Popola un <select> con i ruoli. Se conTutti=true aggiunge l'opzione "Tutti".
+function popolaSelectRuoli(selectId, conTutti) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  let html = conTutti ? '<option value="">Tutti i ruoli</option>' : '';
+  Object.keys(_ruoliCache).forEach(cod => {
+    html += `<option value="${cod}">${escHTML(_ruoliCache[cod])}</option>`;
+  });
+  sel.innerHTML = html;
+}
+
 // ── Commenti ──────────────────────────────────────────────────────────────────
 
 async function toggleCommenti(idFerie, btn) {
@@ -288,7 +490,7 @@ async function loadCommenti(idFerie) {
             <div class="commento-header">
               <span class="commento-autore">
                 <i class="ti ti-user" style="font-size:12px;vertical-align:-1px;margin-right:3px;" aria-hidden="true"></i>
-                ${c.nome || ''} ${c.cognome || ''}${c.responsabile ? ' <span class="role-badge resp" style="font-size:10px;padding:1px 6px;">Resp.</span>' : ''}
+                ${c.nome || ''} ${c.cognome || ''}${c.ceo ? ' <span class="role-badge ceo" style="font-size:10px;padding:1px 6px;">CEO</span>' : (c.responsabile ? ' <span class="role-badge resp" style="font-size:10px;padding:1px 6px;">Resp.</span>' : '')}
               </span>
               <span class="commento-data">${fmtDateTime(c.dataOraIns)}</span>
             </div>
@@ -340,8 +542,10 @@ function escHTML(str) {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 function switchTab(tabId, btn) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  // Disattiva solo i tab/contenuti della stessa pagina di quello cliccato.
+  const container = btn.closest('.page') || document;
+  container.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  container.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   btn.classList.add('active');
 }
