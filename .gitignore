@@ -3,6 +3,8 @@
 *.log
 *.pyc
 *.swp
+*.zip
+__pycache__/
 .DS_Store
 .atom/
 .build/
