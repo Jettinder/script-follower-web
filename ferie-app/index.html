@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portale HR</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── LOGIN ─────────────────────────────────────────────────────────────── -->
+<div id="page-login" class="page active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="logo-row">
+        <div class="logo-icon"><i class="ti ti-building-office" aria-hidden="true"></i></div>
+        <div>
+          <div class="logo-text">Portale HR</div>
+          <div class="logo-sub">Accesso dipendenti</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="inp-email">Email</label>
+        <input type="email" id="inp-email" placeholder="nome@azienda.it" />
+      </div>
+      <div class="field">
+        <label for="inp-pwd">Password</label>
+        <input type="password" id="inp-pwd" placeholder="••••••••" />
+      </div>
+      <button class="btn-primary" id="btn-login" onclick="doLogin()">Accedi</button>
+      <div class="error-msg" id="login-error"></div>
+      <p style="font-size:11px;color:var(--color-text-secondary);margin-top:1rem;text-align:center;">
+        Connesso a <code style="font-size:11px;">localhost</code> · porta 5000
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── DIPENDENTE ─────────────────────────────────────────────────────────── -->
+<div id="page-dipendente" class="page" style="padding:0 0.25rem;">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="avatar" id="dip-avatar"></div>
+      <div>
+        <div class="username" id="dip-name"></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
+          <span class="role-badge">Dipendente</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">
+      <i class="ti ti-logout" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Esci
+    </button>
+  </div>
+
+  <div class="section-title">
+    <i class="ti ti-calendar-plus" aria-hidden="true"></i>Richiedi ferie
+  </div>
+  <div class="info-card">
+    <div class="date-row">
+      <div class="field-form">
+        <label for="dip-inizio">Data inizio</label>
+        <input type="date" id="dip-inizio" />
+      </div>
+      <div class="field-form">
+        <label for="dip-fine">Data fine</label>
+        <input type="date" id="dip-fine" />
+      </div>
+    </div>
+    <button class="btn-submit" id="btn-richiedi" onclick="inviaFerie()">
+      <i class="ti ti-send" style="font-size:13px;vertical-align:-1px;margin-right:4px;" aria-hidden="true"></i>Invia richiesta
+    </button>
+  </div>
+
+  <div class="section-title" style="margin-top:1.5rem;">
+    <i class="ti ti-calendar" aria-hidden="true"></i>Le mie richieste
+  </div>
+  <div id="dip-ferie-list" class="loading-row">
+    <span class="spinner"></span>Caricamento...
+  </div>
+
+</div>
+
+<!-- ── RESPONSABILE ───────────────────────────────────────────────────────── -->
+<div id="page-responsabile" class="page" style="padding:0 0.25rem;">
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="avatar" id="resp-avatar"></div>
+      <div>
+        <div class="username" id="resp-name"></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
+          <span class="role-badge resp">
+            <i class="ti ti-shield-check" style="font-size:12px;vertical-align:-1px;margin-right:3px;" aria-hidden="true"></i>Responsabile
+          </span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">
+      <i class="ti ti-logout" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Esci
+    </button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('tab-ferie', this)">
+      <i class="ti ti-calendar" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Richieste ferie
+    </button>
+    <button class="tab" onclick="switchTab('tab-team', this)">
+      <i class="ti ti-users" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Mio team
+    </button>
+  </div>
+
+  <div id="tab-ferie" class="tab-content active">
+    <div id="resp-ferie-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+  <div id="tab-team" class="tab-content">
+    <div id="resp-team-list" class="loading-row">
+      <span class="spinner"></span>Caricamento...
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
